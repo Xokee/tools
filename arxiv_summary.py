@@ -23,11 +23,11 @@ def generate_response(prompt):
     return summary
 
 
-def get_arxiv_html(input_num = 300):
+def get_arxiv_html(input_num = 400):
     base_url = 'http://export.arxiv.org/api/query?'
     search_query = 'cat:cs.AI+OR+cat:cs.CL+OR+cat:cs.CV+OR+cat:cs.LG'  # 只搜索cs.CL、cs.HC和cs.CV类别
     start = 0
-    max_results = 300  # 获取的论文数量
+    max_results = 400  # 获取的论文数量
     if input_num != 0:
         max_results = input_num
 
@@ -59,19 +59,20 @@ def get_and_write_excel():
     columns = ['Title', 'Published','Summary']
     papers_df = pd.DataFrame(columns=columns)
 
-    llm_keywords = ["llm","gpt","language model","foundation model","chain of thought",
-        "palm","chatbot","llama",
-        "pre-train","generative","transformer","prompt","token","tuning"," fine-tuning","inference"
+    llm_keywords = ["llm","gpt","language model","foundation model","chain of thought","sota",
+        "palm","chatbot","llama","Gemini", "RAG", "mixtral",
+        "pre-train","generative","transformer","prompt","token","inference","expert","parameters","vision","mixture",
         "agent","multi-modal","multimodal","ai","reinforced","reinforcement","rlhf"]
     vision_related_keywords = ["diffusion","midjourney","vision","visual","image","shape","augmentation","segmentation"]
     game_related_keywords = ["game","agent","aigc","AI","simulate","2D","3D","audio","video","bot","NPC","scene"]
+    unrelated = ["protein","medical","medicine","chemical","chemistry","biological"]
 
     #check if only 10 get and try again
     input_num = get_number_from_user()
     parsed_data = get_arxiv_html(input_num)
     entry_length = len(parsed_data.entries)
     print("entry_length",entry_length)
-    print("first entry",parsed_data.entries[0])
+    print("first entry \n",parsed_data.entries[0])
     if entry_length < int(input_num):
         parsed_data = get_arxiv_html(input_num)
         print(entry_length)
@@ -117,6 +118,12 @@ def get_and_write_excel():
             if keyword.lower() in summary.lower():
                 is_game_related_score += 1
 
+        for keyword in unrelated: # Check game related score
+            if keyword.lower() in title.lower():
+                is_llm_related_score -= 3
+            if keyword.lower() in summary.lower():
+                is_llm_related_score -= 1
+
         if "game" in title.lower():
             is_game_related_score += 3
         if "game" in summary.lower():
@@ -141,5 +148,6 @@ def get_and_write_excel():
     except:
         papers_df.to_excel(f'arxiv_papers_{published[:13]}.xlsx', index=False, engine='openpyxl')
 
+    input("Press Enter to exit...")
 
 get_and_write_excel()
