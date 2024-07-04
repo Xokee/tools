@@ -1,4 +1,3 @@
-import openai
 import pandas as pd
 import time
 # import requests
@@ -7,8 +6,6 @@ import urllib.request
 import urllib.parse
 import feedparser
 
-#设置OpenAI API密钥
-openai.api_key = "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"
 
 def generate_response(prompt):
     response = openai.ChatCompletion.create(
