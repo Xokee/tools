@@ -3,21 +3,7 @@ import time
 # import requests
 # from bs4 import BeautifulSoup
 import urllib.request
-import urllib.parse
 import feedparser
-
-
-def generate_response(prompt):
-    response = openai.ChatCompletion.create(
-        model ="gpt-4",
-        messages=[
-        {"role": "system", "content":"You are a helpful assistant."},
-        {"role":"user","content":prompt}
-        ]
-    )
-    print(response)
-    summary = response["choices"][0]["message"]["content"].strip()
-    return summary
 
 
 def get_arxiv_html(input_num = 400):
