@@ -6,13 +6,25 @@ import urllib.request
 import feedparser
 
 
-def get_arxiv_html(input_num = 400):
+
+def generate_response(prompt):
+    response = openai.ChatCompletion.create(
+        model ="gpt-4",
+        messages=[
+        {"role": "system", "content":"You are a helpful assistant."},
+        {"role":"user","content":prompt}
+        ]
+    )
+    print(response)
+    summary = response["choices"][0]["message"]["content"].strip()
+    return summary
+
+
+def get_arxiv_html(input_num):
     base_url = 'http://export.arxiv.org/api/query?'
     search_query = 'cat:cs.AI+OR+cat:cs.CL+OR+cat:cs.CV+OR+cat:cs.LG'  # 只搜索cs.CL、cs.HC和cs.CV类别
     start = 0
-    max_results = 400  # 获取的论文数量
-    if input_num != 0:
-        max_results = input_num
+    max_results = input_num
 
     sort_by = 'submittedDate'  # 按提交日期排序
     sort_order = 'descending'  # 降序排列
@@ -28,9 +40,9 @@ def get_arxiv_html(input_num = 400):
     return parsed_data
 
 def get_number_from_user():
-    input_num = input("Enter paper amount(Max 2000, default 300): ")
+    input_num = input("Enter paper amount(Max 2000, default 400): ")
     if input_num == "":
-        input_num = 0
+        input_num = 400
     else:
         input_num = abs(int(input_num))
     if input_num > 2000:
