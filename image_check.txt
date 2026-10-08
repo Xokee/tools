@@ -1,0 +1,88 @@
+调研完成。先说结论：这五项需求本质上是“证件/文档拍摄质检（capture QA）”，开源生态里没有能一键端到端做完的现成项目，但每一环都有成熟积木可拼。整体思路分三层：① 经典 CV 工程指标（OpenCV 直出，毫秒级）＋ ② 无参考 IQA 深度模型（整体打分）＋ ③ 任务专用检测/分割/OCR（语义判断）。主要工作量在拼装 + 阈值标定，不在模型本身。
+逐项方案与耗时
+以单张 2000–3000px 拍摄图为例：
+表格
+Issue	可行开源方案	成熟度	单张耗时（CPU / GPU）
+Blur	OpenCV Laplacian 方差 / FFT 高频能量（1–5ms）；pyiqa 全家桶（BRISQUE/NIQE/MUSIQ/MANIQA/TOPIQ/CLIP-IQA+/Q-Align）；PaddleOCR 置信度做"可读性"判定	★★★★ 检测容易，"轻微 vs 不可读"阈值标定难	OpenCV：毫秒级；深度 IQA：CPU 0.3–2s / GPU 30–150ms；OCR：CPU 0.5–3s / GPU 100–300ms
+Lighting	欠曝/过曝＝亮度直方图分位数（毫秒级）；不均/阴影＝分块亮度方差 + 深度阴影分割模型；色偏＝灰度世界/白点假设	★★★★ 基础项简单；色偏在证件上不可靠（红封面、国徽会误报）	纯 OpenCV：5–20ms；加深度阴影分割：+50–100ms（GPU）
+Framing	规则证件：OpenCV Canny→轮廓→四边形逼近→判断贴边/透视/占比（经典 document scanner 流程）；复杂背景/异形文档：SegFormer/DeepLab 文档分割微调或四角关键点检测	★★★ 简单场景稳，深色桌面/纹理背景会失效，深度方案需自标数据	OpenCV：10–50ms；深度分割：GPU 20–80ms
+Glare	轻量：过曝连通域面积/占比 + 与 OCR 文字框求交；进阶：高光分割模型（ICH 数据集类）微调，判断"反光∩文字/防伪区"	★★★ 容易和"白底、烫金、全息防伪"混淆，需要语义区分	轻量：CPU <10ms；深度分割：GPU 20–60ms
+Obstruction	MediaPipe Hands（开源，手掌+21 关键点，可判断手指覆盖）；YOLOv8/YOLOv11 手检测；贴纸/胶带/异物无现成类别 → 通用检测器 + 文档区域 mask 求交，或自训练 YOLOv8-seg	★★ 最复杂：无现成类别 + 需版面模板判断"必需区域被覆盖"	MediaPipe：CPU 5–30ms；YOLO：GPU 5–20ms / CPU 50–200ms；自训练分割：GPU 30–100ms
+关键工具佐证：pyiqa 一个库就集成了 MUSIQ、MANIQA、TOPIQ、HyperIQA、BRISQUE、NIQE 等大量 FR/NR 指标，2026 年还加入了基于 Qwen-VL 的 Q-ReAlign 打分器，且纯 PyTorch 实现、GPU 下比 MATLAB 快很多；文档四边形检测在 OpenCV 生态里有大量现成 scanner 示例（边缘检测+透视矫正）；手指/手检测可用 Google 开源 MediaPipe 的手部关键点方案。
+复杂度排名（从难到易）
+Obstruction —— 最难。贴纸/胶带没有通用检测类别，且本质是"应然 vs 实然"对比：必须知道该片区域本来应该是什么（版面模板 + 文档内容 mask），还要叠加"是否覆盖 MRZ/安全特征等必需区"的业务规则。实际项目里这条通常要自建 2k–10k 张标注数据微调分割模型。
+Glare —— 高光与证件白底/全息防伪存在语义歧义；判"遮挡安全特征"依赖版面先验。
+Framing —— 干净背景下 OpenCV 足够；复杂背景需深度分割，且"距离足够近"要联合 OCR 字高判断。
+Blur —— 检测本身容易，但"区分轻微模糊与不可读"的阈值需要用业务 badcase 回归标定；深度 IQA 都是在自然照片/美学数据上训练的，直接搬来对证件会系统性偏差，建议只作辅助分或微调。
+Lighting 基础项 —— 最容易，一天内可上线；色偏和深度阴影项中等。
+端到端耗时预估
+纯 CPU 轻量流水线（OpenCV 指标 + 规则 + MediaPipe）：50–200ms/张，适合边缘/移动端实时反馈；
+CPU + OCR 可读性校验：1–4s/张；
+GPU 完整流水线（2–3 个深度模型 + OCR）：150–500ms/张，单卡约 2–5 QPS；
+VLM 打分（Q-Align 类）：GPU 1–3s/张，只适合离线抽检，不适合在线拦截。
+两点提醒
+这类系统 30–50% 的工作量在各 defect 的阈值标定与 badcase 回归，模型选型反而是次要问题；建议先拿 1–2 周真实 badcase 数据跑通 baseline 再决定哪些环节值得上深度模型。
+证件图像合规要求高，开源方案可完全本地部署，这也是相对商业 SDK（如各类证件质检云服务）的一个实际优势。
+需要的话，我可以帮你把这套拼成一个最小可跑的 pipeline 架构图（模块划分 + 每张图输出的结构化 JSON 字段设计）。
+
+
+
+引用
+ok 我想在pycharm本地做这些。请你大致给我一个思路 我现在应该从零搭建引入对应的库 还是引入某些现成项目的框架？
+编辑
+复制
+分享
+遮挡基线构建与YOLOv8微调
+结论先说：两条路都不选，正确姿势是"自建薄工程 + 现成算法库拼装"。既不从零写算法，也不要引入 MMDetection/MMSeg 这类重型研究框架。
+理由很简单：上一轮已经确认过，不存在端到端做证件拍摄质检的开源项目，所以没有"现成框架"可引；而你要的每个单项能力（模糊、过曝、四边形、手部关键点、OCR）都已经以"pip 库 + 预训练权重"的形式封装好了。你自己要写的只有两样东西：工程骨架和业务规则/阈值——这才是这个系统真正的价值所在。
+推荐路线
+plain
+my_doc_qa/
+├── requirements.txt
+├── config/
+│   └── thresholds.yaml        # 所有阈值集中管理，标定时只改这里
+├── doc_qa/
+│   ├── metrics/               # 每项一个文件，纯函数：输入图片 → 输出指标
+│   │   ├── blur.py            # OpenCV 拉普拉斯方差 (+ 可选 pyiqa 辅助分)
+│   │   ├── lighting.py        # 直方图分位数、分块亮度方差
+│   │   ├── framing.py         # 四边形检测、贴边判断、文档占比
+│   │   ├── glare.py           # 过曝连通域 + 与文字框求交
+│   │   └── obstruction.py     # MediaPipe Hands / YOLO + 文档区域求交
+│   ├── models/                # 深度模型统一薄封装，可插拔可开关
+│   │   ├── iqa.py             # pyiqa 封装
+│   │   ├── ocr.py             # PaddleOCR 封装（置信度、字高、文字框）
+│   │   └── detector.py        # ultralytics YOLO 封装
+│   ├── rules.py               # 指标 → 判定（轻微/严重/不可读的分级逻辑）
+│   └── pipeline.py            # 编排：一张图进，结构化 JSON 报告出
+└── scripts/
+    ├── run_batch.py           # 跑一个文件夹，结果存 CSV/JSON
+    └── label_tool.py          # badcase 标注（后续微调用）
+设计上的几个要点：
+metrics 层全部写成纯函数、无状态，方便在 PyCharm 里对单张图逐块调试，也方便之后换成深度方案时接口不变；
+深度模型做成可开关（config 里 use_iqa: true/false），前期没装齐依赖时纯 OpenCV 也能跑通主链路；
+thresholds.yaml 集中管理阈值，这是后面 1–2 个月迭代的主战场，别散落在代码里；
+先做跑批脚本，不要做成实时服务。在 PyCharm 里调这项工作的正确姿势是：攒 100–300 张样本（含好图和真实 badcase），run_batch.py 一键出报告，按 issue 逐类看误报漏报，再回头改阈值。逐张 debug 效率很低。
+建议的落地顺序
+表格
+阶段	内容	目的
+1	OpenCV + 手写 blur / lighting / framing	一两天跑通主链路，先看到结构化输出
+2	接入 PaddleOCR（置信度、字高）	解决"模糊→不可读"判定和"距离是否足够近"
+3	接入 pyiqa 辅助分 + MediaPipe/ YOLO 遮挡基线	覆盖全部五项 issue 的 v1
+4	攒 badcase、标数据、微调 YOLOv8-seg	攻 obstruction 和 glare 这两个最难的
+环境依赖（坑提前说）
+Python 3.10（PaddleOCR 和 MediaPipe 对版本最挑剔，3.10 是两边都安全的交集）；
+装 paddlepaddle CPU 版即可，别急着上 GPU，先把链路跑通；
+已知的冲突点：旧版 paddle 不支持 numpy 2.x，装完 paddle 后如果报 numpy 相关错，降到 numpy<2；
+pyiqa 首次运行会自动下载权重；PaddleOCR 首次运行会下载检测/识别模型（几百 MB），需要网络。
+最小 requirements.txt 骨架：
+plain
+opencv-python
+numpy<2
+pyiqa
+paddlepaddle
+paddleocr
+ultralytics
+mediapipe
+pyyaml
+pandas
+一句话总结：库全部用现成的，框架自己搭薄的，精力 80% 花在规则层和 badcase 标定上。如果你需要，我可以帮你把 Phase 1 的三个 metrics 模块（blur / lighting / framing）直接写出来，你在 PyCharm 里建工程粘贴就能跑。
