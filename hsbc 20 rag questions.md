@@ -1,3 +1,14 @@
+
+OR experiment design 
+- modify current labels to match with the new schema
+- Add name and address matching JSONs (create references for each scenario. Create new samples if necessary)
+- Incorporate new data with image issues and update labels 
+- Pay attention to tenancy agreement name field 
+- Create samples and labels with 2 tenants 
+- Run tests and produce reports 
+
+
+
 # 20 Concise English Graph RAG Test Questions (2/3 Hop Only, No HSBC Mention)
 Each entry contains:
 1) Graph Hop Reasoning Chain
